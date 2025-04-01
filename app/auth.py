@@ -15,7 +15,7 @@ ALGORITHM = "HS256"
 REDIRECT_URI = "http://localhost:8000/callback/yandex"
 
 oauth2_scheme = OAuth2AuthorizationCodeBearer(
-    authorizationUrl=f"https://oauth.yandex.ru/authorize?response_type=code&client_id={YANDEX_CLIENT_ID}",
+    authorizationUrl=f"https://oauth.yandex.ru/authorize?response_type=code&client_id={YANDEX_CLIENT_ID}&redirect_uri={REDIRECT_URI}",
     tokenUrl="https://oauth.yandex.ru/token",
 )
 

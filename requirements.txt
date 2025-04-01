@@ -1,2 +1,9 @@
 fastapi[all]
 aiofiles
+sqlalchemy
+asyncpg
+requests
+pyjwt
+python-dotenv
+uvicorn
+pydantic
