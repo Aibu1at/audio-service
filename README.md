@@ -2,7 +2,7 @@
 
 1. Установить Docker и Docker Compose  
 2. Создать `.env` с YANDEX_CLIENT_ID, YANDEX_CLIENT_SECRET, SECRET_KEY.  
-   (client_id и client_secret взять у яндекса, secret_key - девичья фамилия вашей матери)  
+   (client_id и client_secret взять у яндекса https://oauth.yandex.ru/client/new, secret_key - девичья фамилия вашей матери)  
 3. Запустить:  
    ```bash
    docker-compose up --build
