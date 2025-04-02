@@ -3,8 +3,8 @@ from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2AuthorizationCodeBearer
 import jwt
 from jwt.exceptions import InvalidTokenError
-import requests
 from dotenv import load_dotenv
+from datetime import datetime, timedelta
 
 load_dotenv()
 
@@ -27,5 +27,21 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     except InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-def create_access_token(data: dict):
-    return jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM)
+def create_access_token(data: dict, expires_delta: timedelta = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+def refresh_access_token(token: str):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+        new_token = create_access_token({"sub": user_id})
+        return new_token
+    except InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
