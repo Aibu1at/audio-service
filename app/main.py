@@ -1,7 +1,6 @@
 from fastapi import FastAPI, UploadFile, HTTPException, Depends, Form
-from fastapi.responses import FileResponse
-from app.shemas import AudioFileCreate, AudioFileResponse
-from app.auth import get_current_user, create_access_token, YANDEX_CLIENT_ID, REDIRECT_URI, YANDEX_CLIENT_SECRET
+from app.shemas import AudioFileCreate, AudioFileResponse, UserResponse, UserUpdate
+from app.auth import get_current_user, create_access_token, refresh_access_token, YANDEX_CLIENT_ID, REDIRECT_URI, YANDEX_CLIENT_SECRET
 import os
 import aiofiles
 import requests
@@ -37,17 +36,51 @@ async def callback_yandex(code: str):
     token = create_access_token({"sub": user_info["id"]})
     return {"access_token": token, "token_type": "bearer"}
 
-@app.get("/users/me")
-async def get_user(user_id: str = Depends(get_current_user)):
-    return {"user_id": user_id}
+@app.post("/refresh")
+async def refresh_token(user_id: str = Depends(get_current_user)):
+    new_token = refresh_access_token(user_id)
+    return {"access_token": new_token, "token_type": "bearer"}
+
+@app.get("/users/me", response_model=UserResponse)
+async def get_user_me(user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    user = (await db.execute(select(User).filter(User.id == user_id))).scalars().first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return UserResponse(id=user.id, email=user.email, is_superuser=user.is_superuser)
+
+@app.put("/users/me", response_model=UserResponse)
+async def update_user_me(user_id: str = Depends(get_current_user), user_data: UserUpdate = Depends(), db: AsyncSession = Depends(get_db)):
+    user = (await db.execute(select(User).filter(User.id == user_id))).scalars().first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.email = user_data.email
+    await db.commit()
+    return UserResponse(id=user.id, email=user.email, is_superuser=user.is_superuser)
 
 @app.delete("/users/{user_id}")
-async def delete_user(user_id: str, current_user: str = Depends(get_current_user)):
-    pass
+async def delete_user(user_id: str, current_user: str = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    superuser = (await db.execute(select(User).filter(User.id == current_user, User.is_superuser == True))).scalars().first()
+    if not superuser:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    result = await db.execute(select(User).filter(User.id == user_id))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    # Файлы тоже удалим
+    files = await db.execute(select(AudioFile).filter(AudioFile.user_id == user_id))
+    for file in files.scalars().all():
+        try:
+            os.remove(file.path)
+        except FileNotFoundError:
+            pass
+        await db.delete(file)
+    await db.delete(user)
+    await db.commit()
+    return {"detail": "User deleted"}
 
 @app.post("/audio/upload", response_model=AudioFileResponse)
 async def upload_file(file: UploadFile, file_data: AudioFileCreate = Depends(), user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    if not file.filename.endswith(('.mp3', '.wav', '.ogg')):
+    if not file.filename.endswith(('.mp3', '.wav', '.ogg')): #По хорошему, нужна нормальная проверка типа файла а не это
         raise HTTPException(status_code=400, detail="Invalid file type")
     file_path = os.path.join(UPLOAD_DIR, f"{user_id}_{file_data.name}")
     async with aiofiles.open(file_path, "wb") as out_file:

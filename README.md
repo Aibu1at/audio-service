@@ -12,3 +12,9 @@
 2. Документация по развертыванию сервиса и БД в Docker.
 
 Все коммиты вести от самого начала разработки. Код разместить в GitHub в открытом репозитории / дать доступ в приватный.
+
+curl -X 'GET' 'http://localhost:8000/login/yandex'
+
+curl -X GET "http://localhost:8000/users/me" -H "Authorization: Bearer <>"
+
+curl -X 'POST' 'http://localhost:8000/refresh' -H "Authorization: Bearer <>"
