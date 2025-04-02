@@ -23,7 +23,7 @@ async def login_yandex():
     return {"url": f"https://oauth.yandex.ru/authorize?response_type=code&client_id={YANDEX_CLIENT_ID}&redirect_uri={REDIRECT_URI}"}
 
 @app.get("/callback/yandex")
-async def callback_yandex(code: str):
+async def callback_yandex(code: str, db: AsyncSession = Depends(get_db)):
     data = {
         "grant_type": "authorization_code",
         "code": code,
@@ -33,7 +33,20 @@ async def callback_yandex(code: str):
     response = requests.post("https://oauth.yandex.ru/token", data=data)
     tokens = response.json()
     user_info = requests.get("https://login.yandex.ru/info", headers={"Authorization": f"Bearer {tokens['access_token']}"}).json()
-    token = create_access_token({"sub": user_info["id"]})
+    user_id = user_info["id"]
+    
+    result = await db.execute(select(User).filter(User.id == user_id))
+    user = result.scalars().first()
+    if not user:
+        is_superuser = False
+        result = await db.execute(select(User))
+        if not result.scalars().first():
+            is_superuser = True  #Первый пользаватель будет суперползователем
+        user = User(id=user_id, email=user_info["default_email"], is_superuser=is_superuser)
+        db.add(user)
+        await db.commit()
+    
+    token = create_access_token({"sub": user_id})
     return {"access_token": token, "token_type": "bearer"}
 
 @app.post("/refresh")
@@ -66,7 +79,7 @@ async def delete_user(user_id: str, current_user: str = Depends(get_current_user
     user = result.scalars().first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    # Файлы тоже удалим
+    #Файлы тоже удалим
     files = await db.execute(select(AudioFile).filter(AudioFile.user_id == user_id))
     for file in files.scalars().all():
         try:
