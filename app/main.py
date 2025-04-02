@@ -93,8 +93,12 @@ async def delete_user(user_id: str, current_user: str = Depends(get_current_user
 
 @app.post("/audio/upload", response_model=AudioFileResponse)
 async def upload_file(file: UploadFile, file_data: AudioFileCreate = Depends(), user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    if not file.filename.endswith(('.mp3', '.wav', '.ogg')): #По хорошему, нужна нормальная проверка типа файла а не это
+    if not file.filename.endswith(('.mp3', '.wav', '.ogg')): # По хорошему, нужна нормальная проверка типа файла а не это
         raise HTTPException(status_code=400, detail="Invalid file type")
+    query = await db.execute(select(AudioFile).filter(AudioFile.user_id == user_id, AudioFile.name == file_data.name))
+    existing_file = query.scalars().first()
+    if existing_file:
+        raise HTTPException(status_code=409, detail="Audio file with this name already exists")
     file_path = os.path.join(UPLOAD_DIR, f"{user_id}_{file_data.name}")
     async with aiofiles.open(file_path, "wb") as out_file:
         content = await file.read()
